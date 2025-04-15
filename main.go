@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,25 @@ import (
 
 	"github.com/gorilla/mux"
 )
+
+type TeamYear struct {
+    Name     string `json:"name"`
+    Year     string `json:"year"`
+	Roster   string `json:"roster"`
+	Schedule string `json:"schedule"`
+}
+
+type Roster struct {
+    Name   string `json:"name"`
+    Year   string `json:"year"`
+    Roster string `json:"roster"`
+}
+
+type Schedule struct {
+    Name     string `json:"name"`
+    Year     string `json:"year"`
+    Schedule string `json:"schedule"`
+}
 
 // responseWriter is a custom http.ResponseWriter that captures the status code
 type responseWriter struct {
@@ -90,7 +110,15 @@ func main() {
 		vars := mux.Vars(r)
 		team := vars["team"]
 		year := vars["year"]
-		fmt.Fprintf(w, "You've requested the team %s in the year %s\n", team, year)
+
+		teamYear := TeamYear{
+			Name: team,
+			Year: year,
+			Roster: "https://www.basketball-reference.com/teams/" + team + "/" + year + ".html",
+			Schedule: "https://www.basketball-reference.com/teams/" + team + "/" + year + "_games.html",
+		}
+
+		json.NewEncoder(w).Encode(teamYear)
 	}).Methods("GET")
 
 	// Define the dynamic route for the team year roster endpoint
@@ -98,7 +126,14 @@ func main() {
 		vars := mux.Vars(r)
 		team := vars["team"]
 		year := vars["year"]
-		fmt.Fprintf(w, "You've requested the roster for the team %s in the year %s\n", team, year)
+
+		roster := Roster{
+			Name: team,
+			Year: year,
+			Roster: "https://www.basketball-reference.com/teams/" + team + "/" + year + ".html",
+		}
+
+		json.NewEncoder(w).Encode(roster)
 	}).Methods("GET")
 
 	// Define the dynamic route for the team year schedule endpoint
@@ -106,7 +141,14 @@ func main() {
 		vars := mux.Vars(r)
 		team := vars["team"]
 		year := vars["year"]
-		fmt.Fprintf(w, "You've requested the schedule for the team %s in the year %s\n", team, year)
+
+		schedule := Schedule{
+			Name: team,
+			Year: year,
+			Schedule: "https://www.basketball-reference.com/teams/" + team + "/" + year + "_games.html",
+		}
+
+		json.NewEncoder(w).Encode(schedule)
 	}).Methods("GET")
 
 
