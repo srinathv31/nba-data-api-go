@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -17,23 +18,41 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+type Player struct {
+    Name         string `json:"name" bson:"name"`
+    RegularSeason struct {
+        G    string `json:"G" bson:"G"`
+        PER  string `json:"PER" bson:"PER"`
+        TSP  string `json:"TS%" bson:"TS%"`
+        WS   string `json:"WS" bson:"WS"`
+    } `json:"regular_season" bson:"regular_season"`
+    Playoffs struct {
+        G    string `json:"G" bson:"G"`
+        PER  string `json:"PER" bson:"PER"`
+        TSP  string `json:"TS%" bson:"TS%"`
+        WS   string `json:"WS" bson:"WS"`
+    } `json:"playoffs" bson:"playoffs"`
+}
+
 type TeamYear struct {
-    Name     string `json:"name" bson:"name"`
-	FullName string `json:"full_name" bson:"full_name"`
-    Year     string `json:"year" bson:"year"`
-	Roster   string `json:"roster" bson:"roster"`
-	Schedule string `json:"schedule" bson:"schedule"`
+    Team        string                 `json:"team" bson:"team"`
+    FullName    string                 `json:"full_name" bson:"full_name"`
+    Year        int                    `json:"year" bson:"year"`
+    RosterURL   string                 `json:"roster_url" bson:"roster_url"`
+    Roster      []Player      `json:"roster" bson:"roster"`
+    ScheduleURL string                 `json:"schedule_url" bson:"schedule_url"`
+    Schedule    map[string]interface{} `json:"schedule" bson:"schedule"`
 }
 
 type Roster struct {
-    Name   string `json:"name"`
-    Year   string `json:"year"`
+    Team   string `json:"team"`
+    Year   int `json:"year"`
     Roster string `json:"roster"`
 }
 
 type Schedule struct {
-    Name     string `json:"name"`
-    Year     string `json:"year"`
+    Team     string `json:"team"`
+    Year     int `json:"year"`
     Schedule string `json:"schedule"`
 }
 
@@ -139,12 +158,17 @@ func main() {
 	r.HandleFunc("/v1/nba/{team}/{year}", func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		team := vars["team"]
-		year := vars["year"]
+		yearStr := vars["year"]
+		year, err := strconv.Atoi(yearStr)
+		if err != nil {
+			http.Error(w, "Invalid year format", http.StatusBadRequest)
+			return
+		}
 
 		// find the team in the database
-		collection := client.Database("nba-data").Collection("teams")
+		collection := client.Database("nba-data").Collection("nba_seasons_v2")
 		var result TeamYear
-		err := collection.FindOne(context.TODO(), bson.M{"name": team, "year": year}).Decode(&result)
+		err = collection.FindOne(context.TODO(), bson.M{"team": team, "year": year}).Decode(&result)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -157,12 +181,17 @@ func main() {
 	r.HandleFunc("/v1/nba/{team}/{year}/roster", func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		team := vars["team"]
-		year := vars["year"]
-
+		yearStr := vars["year"]
+		year, err := strconv.Atoi(yearStr)
+		if err != nil {
+			http.Error(w, "Invalid year format", http.StatusBadRequest)
+			return
+		}
+		
 		roster := Roster{
-			Name: team,
+			Team: team,
 			Year: year,
-			Roster: "https://www.basketball-reference.com/teams/" + team + "/" + year + ".html",
+			Roster: "https://www.basketball-reference.com/teams/" + team + "/" + yearStr + ".html",
 		}
 
 		json.NewEncoder(w).Encode(roster)
@@ -172,12 +201,17 @@ func main() {
 	r.HandleFunc("/v1/nba/{team}/{year}/schedule", func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		team := vars["team"]
-		year := vars["year"]
+		yearStr := vars["year"]
+		year, err := strconv.Atoi(yearStr)
+		if err != nil {
+			http.Error(w, "Invalid year format", http.StatusBadRequest)
+			return
+		}
 
 		schedule := Schedule{
-			Name: team,
+			Team: team,
 			Year: year,
-			Schedule: "https://www.basketball-reference.com/teams/" + team + "/" + year + "_games.html",
+			Schedule: "https://www.basketball-reference.com/teams/" + team + "/" + yearStr + "_games.html",
 		}
 
 		json.NewEncoder(w).Encode(schedule)
