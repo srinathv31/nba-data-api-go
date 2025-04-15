@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,13 +10,19 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 type TeamYear struct {
-    Name     string `json:"name"`
-    Year     string `json:"year"`
-	Roster   string `json:"roster"`
-	Schedule string `json:"schedule"`
+    Name     string `json:"name" bson:"name"`
+	FullName string `json:"full_name" bson:"full_name"`
+    Year     string `json:"year" bson:"year"`
+	Roster   string `json:"roster" bson:"roster"`
+	Schedule string `json:"schedule" bson:"schedule"`
 }
 
 type Roster struct {
@@ -94,8 +101,31 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	// Load .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	// Create a new router
 	r := mux.NewRouter()
+
+	// connect to mongo db
+	uri := os.Getenv("MONGODB_URI")
+	if uri == "" {
+		log.Fatal("Missing 'MONGODB_URI' environment variable.")
+	}
+	client, err := mongo.Connect(options.Client().
+		ApplyURI(uri))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err := client.Disconnect(context.TODO()); err != nil {
+			panic(err)
+		}
+	}()
 
 	// Apply the logging middleware to all routes
 	r.Use(loggingMiddleware)
@@ -111,14 +141,16 @@ func main() {
 		team := vars["team"]
 		year := vars["year"]
 
-		teamYear := TeamYear{
-			Name: team,
-			Year: year,
-			Roster: "https://www.basketball-reference.com/teams/" + team + "/" + year + ".html",
-			Schedule: "https://www.basketball-reference.com/teams/" + team + "/" + year + "_games.html",
+		// find the team in the database
+		collection := client.Database("nba-data").Collection("teams")
+		var result TeamYear
+		err := collection.FindOne(context.TODO(), bson.M{"name": team, "year": year}).Decode(&result)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
 		}
 
-		json.NewEncoder(w).Encode(teamYear)
+		json.NewEncoder(w).Encode(result)
 	}).Methods("GET")
 
 	// Define the dynamic route for the team year roster endpoint
