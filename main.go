@@ -45,15 +45,19 @@ type TeamYear struct {
 }
 
 type Roster struct {
-    Team   string `json:"team"`
-    Year   int `json:"year"`
-    Roster string `json:"roster"`
+    Team        string                 `json:"team" bson:"team"`
+    FullName    string                 `json:"full_name" bson:"full_name"`
+    Year        int                    `json:"year" bson:"year"`
+    RosterURL   string                 `json:"roster_url" bson:"roster_url"`
+    Roster      []Player      `json:"roster" bson:"roster"`
 }
 
 type Schedule struct {
-    Team     string `json:"team"`
-    Year     int `json:"year"`
-    Schedule string `json:"schedule"`
+    Team        string                 `json:"team" bson:"team"`
+    FullName    string                 `json:"full_name" bson:"full_name"`
+    Year        int                    `json:"year" bson:"year"`
+    ScheduleURL string                 `json:"schedule_url" bson:"schedule_url"`
+    Schedule    map[string]interface{} `json:"schedule" bson:"schedule"`
 }
 
 // responseWriter is a custom http.ResponseWriter that captures the status code
@@ -188,13 +192,16 @@ func main() {
 			return
 		}
 		
-		roster := Roster{
-			Team: team,
-			Year: year,
-			Roster: "https://www.basketball-reference.com/teams/" + team + "/" + yearStr + ".html",
+		// find the team in the database with the roster and related team info
+		collection := client.Database("nba-data").Collection("nba_seasons_v2")
+		var result Roster
+		err = collection.FindOne(context.TODO(), bson.M{"team": team, "year": year}, options.FindOne().SetProjection(bson.M{"schedule": 0})).Decode(&result)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
 		}
 
-		json.NewEncoder(w).Encode(roster)
+		json.NewEncoder(w).Encode(result)
 	}).Methods("GET")
 
 	// Define the dynamic route for the team year schedule endpoint
@@ -208,13 +215,16 @@ func main() {
 			return
 		}
 
-		schedule := Schedule{
-			Team: team,
-			Year: year,
-			Schedule: "https://www.basketball-reference.com/teams/" + team + "/" + yearStr + "_games.html",
+		// find the team in the database with the schedule
+		collection := client.Database("nba-data").Collection("nba_seasons_v2")
+		var result Schedule
+		err = collection.FindOne(context.TODO(), bson.M{"team": team, "year": year}, options.FindOne().SetProjection(bson.M{"roster": 0})).Decode(&result)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
 		}
 
-		json.NewEncoder(w).Encode(schedule)
+		json.NewEncoder(w).Encode(result)
 	}).Methods("GET")
 
 
